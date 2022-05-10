@@ -225,5 +225,96 @@ class _DetailsPageState extends State<DetailsPage> {
 }
 ```
 
+### 兼容浏览器URL
 
+基本使用在网页上运行时会有两个问题
+
+* 当页面发生变化时地址栏url并不会一起改变
+
+* 在地址栏url输入地址时不能进入到指定页面
+
+1、定义**RouteInformationParser**
+
+```dart
+class AppRouteInformationParser
+    extends RouteInformationParser<List<RouteSettings>> {
+  const AppRouteInformationParser() : super();
+
+  @override
+  Future<List<RouteSettings>> parseRouteInformation(
+      RouteInformation routeInformation) async {
+
+    print('parseRouteInformation location:${routeInformation.location}');
+    
+    final uri = Uri.parse(routeInformation.location!);
+
+    if (uri.pathSegments.isEmpty) {
+      return [const RouteSettings(name: '/home')];
+    }
+
+    print('parseRouteInformation:${uri.pathSegments.toString()}');
+    
+    final routeSettings = uri.pathSegments
+        .map((pathSegment) => RouteSettings(
+              name: '/$pathSegment',
+              arguments: pathSegment == uri.pathSegments.last
+                  ? uri.queryParameters
+                  : null,
+            ))
+        .toList();
+
+    return routeSettings;
+  }
+
+  @override
+  RouteInformation? restoreRouteInformation(List<RouteSettings> configuration) {
+    print('restoreRouteInformation:$configuration');
+
+    final location = configuration.last.name;
+    final arguments = _restoreArguments(configuration.last);
+    return RouteInformation(location: '$location$arguments');
+  }
+
+  String _restoreArguments(RouteSettings routeSettings) {
+
+    if (routeSettings.name != 'details') return '';
+    var args = routeSettings.arguments as Map;
+    print('_restoreArguments:${args['imgUrl']}');
+    return '?imgUrl=${args['imgUrl']}';
+  }
+}
+```
+
+parseRouteInformation:将URL地址转换成路由状态(RouteSettings)
+
+restoreRouteInformation:将路由状态转换为一个URL地址
+
+2、修改RouterDelegate添加方法
+
+```dart
+  @override
+  List<Page> get currentConfiguration => List.of(_pages);
+
+  @override
+  Future<void> setNewRoutePath(List<RouteSettings> configuration) async {
+    debugPrint('setNewRoutePath ${configuration.last.name}');
+
+    _setPath(configuration
+        .map((routeSettings) => _createPage(routeSettings))
+        .toList());
+
+  }
+
+  void _setPath(List<MaterialPage> pages) {
+    _pages.clear();
+    _pages.addAll(pages);
+
+    if(_pages.first.name != '/') {
+      _pages.insert(0, _createPage(const RouteSettings(name: '/')));
+    }
+
+    notifyListeners();
+  }
+
+```
 
